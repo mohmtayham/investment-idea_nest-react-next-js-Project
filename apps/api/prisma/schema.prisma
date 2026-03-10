@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 Int       @id @default(autoincrement())
+  email              String    @unique
+  name               String
+  password           String
+  hashedRefreshToken String?
+  role               Role      @default(USER)
+  profile            Profile?
+  bookings           Booking[]
+  comments           Comment[]
+  posts              Post[]
+}
+
+model Profile {
+  id     Int    @id @default(autoincrement())
+  bio    String
+  userId Int    @unique
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+model Booking {
+  id     Int      @id @default(autoincrement())
+  date   DateTime
+  userId Int
+  user   User     @relation(fields: [userId], references: [id])
+}
+
+model Category {
+  id    Int     @id @default(autoincrement())
+  slug  String  @unique
+  title String
+  img   String?
+  Posts Post[]
+}
+
+model Post {
+  id        Int       @id @default(autoincrement())
+  createdAt DateTime  @default(now())
+  slug      String    @unique
+  title     String
+  desc      String
+  img       String?
+  views     Int       @default(0)
+  catSlug   String
+  cat       Category  @relation(fields: [catSlug], references: [slug])
+  userEmail String
+  user      User      @relation(fields: [userEmail], references: [email])
+  comments  Comment[]
+}
+
+model Comment {
+  id        Int       @id @default(autoincrement())
+  text      String
+  createdAt DateTime? @default(now()) @db.Timestamp(6)
+  user_id   Int
+  user      User      @relation(fields: [user_id], references: [id])
+  post_id   Int
+  post      Post      @relation(fields: [post_id], references: [id])
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  USER
+}
