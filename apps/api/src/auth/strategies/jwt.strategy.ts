@@ -1,30 +1,25 @@
-// src/auth/strategies/jwt.strategy.ts
-
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config'; // استيراد ConfigService
 import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
-import { AuthService } from '../auth.service';
-import type { AuthJwtPayload } from '../types/auth-jwtPayload';
+import { Strategy, ExtractJwt } from 'passport-jwt';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(
-    // حقن ConfigService بدلاً من ConfigType مباشرة في super
-    private readonly configService: ConfigService, 
-    private readonly authService: AuthService,
-  ) {
+  constructor(private configService: ConfigService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      ignoreExpiration: false,
-      // استخدم configService لجلب المفتاح السري
-     secretOrKey: configService.get<string>('JWT_SECRET')!, // لاحظ علامة التعجب
-
+      secretOrKey: configService.getOrThrow<string>('JWT_SECRET'),
     });
+
+    console.log('JWT STRATEGY INITIALIZED');
   }
 
-  async validate(payload: AuthJwtPayload) {
-    // يمكنك الآن استخدام this.authService بأمان
-    return this.authService.validateJwtUser(payload.sub);
-  }
+async validate(payload: any) {
+  console.log('--- [JwtStrategy] validate called with payload ---');
+  console.log('Payload:', payload);
+  return {
+    id: payload.sub,
+    role: payload.role,
+  };
+}
 }

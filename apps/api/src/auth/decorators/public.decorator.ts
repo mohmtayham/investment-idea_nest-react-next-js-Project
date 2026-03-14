@@ -1,4 +1,3 @@
 import { SetMetadata } from '@nestjs/common';
-
-export const IS_PUBLIC_KEY = 'IS_PUBLIC';
+export const IS_PUBLIC_KEY = 'isPublic'; // اجعلها camelCase لتجنب الأخطاء
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);

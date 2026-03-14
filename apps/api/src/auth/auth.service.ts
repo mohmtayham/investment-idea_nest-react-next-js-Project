@@ -47,7 +47,7 @@ async registerUser(createUserDto: CreateUserDto) {
   }
 
   async login(userId: number, name: string, role: Role) {
-    const { accessToken, refreshToken } = await this.generateTokens(userId);
+    const { accessToken, refreshToken } = await this.generateTokens(userId,role);
     const hashedRT = await hash(refreshToken);
     await this.userService.updateHashedRefreshToken(userId, hashedRT);
     return {
@@ -59,18 +59,17 @@ async registerUser(createUserDto: CreateUserDto) {
     };
   }
 
-  async generateTokens(userId: number) {
-    const payload: AuthJwtPayload = { sub: userId };
-    const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload),
-      this.jwtService.signAsync(payload, this.refreshTokenConfig),
-    ]);
+async generateTokens(userId: number, role: string) {
+  const payload = { sub: userId, role: role }; // ✅ role is now included!
+  // Note: You might need to update your `AuthJwtPayload` interface to include `role: string` so TypeScript doesn't complain.
+  
+  const [accessToken, refreshToken] = await Promise.all([
+    this.jwtService.signAsync(payload),
+    this.jwtService.signAsync(payload, this.refreshTokenConfig),
+  ]);
 
-    return {
-      accessToken,
-      refreshToken,
-    };
-  }
+  return { accessToken, refreshToken };
+}
 
   async validateJwtUser(userId: number) {
     const user = await this.userService.findOne(userId);
@@ -94,8 +93,8 @@ async registerUser(createUserDto: CreateUserDto) {
     return currentUser;
   }
 
-  async refreshToken(userId: number, name: string) {
-    const { accessToken, refreshToken } = await this.generateTokens(userId);
+  async refreshToken(userId: number, name: string, role: string) {
+    const { accessToken, refreshToken } = await this.generateTokens(userId, role);
     const hashedRT = await hash(refreshToken);
     await this.userService.updateHashedRefreshToken(userId, hashedRT);
     return {

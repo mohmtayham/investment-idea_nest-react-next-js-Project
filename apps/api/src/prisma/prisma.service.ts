@@ -9,7 +9,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     // هذه الحماية تمنع الاتصال المتكرر في حال تم استدعاء الخدمة من أكثر من مكان
     if (!this.$connect['called']) {
       await this.$connect();
-      this.logger.log('✅ تم الاتصال بقاعدة البيانات (نسخة واحدة فريدة)');
+      this.logger.log('✅ Connected to the database successfully');
       this.$connect['called'] = true;
     }
   }

@@ -38,14 +38,14 @@ async registerUser(@Body() createUserDto: CreateUserDto) {
     throw error;
   }
 }
-  @Public()
+ @Public()
   @UseGuards(LocalAuthGuard)
   @Post('signin')
   login(@Request() req) {
     return this.authService.login(req.user.id, req.user.name, req.user.role);
   }
 
-  @Roles('ADMIN', 'EDITOR')
+  @Roles('ADMIN')
   @Get('protected')
   getAll(@Request() req) {
     return {
@@ -57,7 +57,7 @@ async registerUser(@Body() createUserDto: CreateUserDto) {
   @UseGuards(RefreshAuthGuard)
   @Post('refresh')
   refreshToken(@Request() req) {
-    return this.authService.refreshToken(req.user.id, req.user.name);
+    return this.authService.refreshToken(req.user.id, req.user.name, req.user.role);
   }
 
   // @Public()

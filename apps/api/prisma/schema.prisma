@@ -7,68 +7,344 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id                 Int       @id @default(autoincrement())
-  email              String    @unique
-  name               String
-  password           String
-  hashedRefreshToken String?
-  role               Role      @default(USER)
-  profile            Profile?
-  bookings           Booking[]
-  comments           Comment[]
-  posts              Post[]
+// ------------------------------------------------------
+// Enums
+// ------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  IDEA_OWNER
+  COMMITTEE_MEMBER
+}
+enum BusinessPlanStatus {
+  DRAFT
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  NEEDS_REVISION
+}
+enum CommitteeMemberRole {
+  LEADER
+  MEMBER
+  INVESTOR
+  TECHNICAL_EXPERT
 }
 
-model Profile {
-  id     Int    @id @default(autoincrement())
-  bio    String
-  userId Int    @unique
-  user   User   @relation(fields: [userId], references: [id])
+enum IdeaStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  NEEDS_REVISION
+  APPROVED
+  REJECTED
+  PAUSED_FOR_PAYMENT
 }
 
-model Booking {
-  id     Int      @id @default(autoincrement())
-  date   DateTime
-  userId Int
-  user   User     @relation(fields: [userId], references: [id])
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
 }
 
-model Category {
-  id    Int     @id @default(autoincrement())
-  slug  String  @unique
-  title String
-  img   String?
-  Posts Post[]
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER
+  FUNDING
+  PENALTY
+  REFUND
 }
 
-model Post {
-  id        Int       @id @default(autoincrement())
-  createdAt DateTime  @default(now())
-  slug      String    @unique
-  title     String
-  desc      String
-  img       String?
-  views     Int       @default(0)
-  catSlug   String
-  cat       Category  @relation(fields: [catSlug], references: [slug])
-  userEmail String
-  user      User      @relation(fields: [userEmail], references: [email])
-  comments  Comment[]
-}
+// ------------------------------------------------------
+// Models
+// ------------------------------------------------------
 
-model Comment {
-  id        Int       @id @default(autoincrement())
-  text      String
-  createdAt DateTime? @default(now()) @db.Timestamp(6)
-  user_id   Int
-  user      User      @relation(fields: [user_id], references: [id])
-  post_id   Int
-  post      Post      @relation(fields: [post_id], references: [id])
-}
-
+// 1. تغيير الاسم ليتوافق مع الـ Auth Service
 enum Role {
   ADMIN
-  EDITOR
-  USER
+  IDEA_OWNER
+  COMMITTEE_MEMBER
+}
+
+model User {
+  id                 Int      @id @default(autoincrement())
+  name               String
+  email              String   @unique
+  password           String
+  role               Role     @default(IDEA_OWNER) // تم تغيير النوع هنا
+  phone              String?
+  profileImage       String?  @map("profile_image")
+  bio                String?  @db.Text
+  
+  // 2. إضافة الحقل المفقود هنا لعمل الـ Refresh Token
+  hashedRefreshToken String?  @map("hashed_refresh_token") @db.Text
+
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  // العلاقات (Relations)
+  ideas                Idea[]
+  wallet               Wallet?
+  committeeMembers     CommitteeMember[]
+  notifications        Notification[]
+  sentTransactions     WalletTransaction[] @relation("Sender")
+  receivedTransactions WalletTransaction[] @relation("Receiver")
+  profitDistributions  ProfitDistribution[]
+
+  @@map("users") 
+}
+model Committee {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?  @db.Text
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  ideas       Idea[]
+  members     CommitteeMember[]
+
+  @@map("committees")
+}
+
+model CommitteeMember {
+  id              Int                 @id @default(autoincrement())
+  roleInCommittee CommitteeMemberRole @default(MEMBER) @map("role_in_committee")
+  
+  // Relations
+  userId          Int                 @map("user_id")
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  committeeId     Int                 @map("committee_id")
+  committee       Committee           @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+
+  @@map("committee_members")
+}
+
+model Idea {
+  id                     Int        @id @default(autoincrement())
+  title                  String
+  description            String     @db.Text
+  problem                String?    @db.Text
+  solution               String?    @db.Text
+  targetAudience         String?    @map("target_audience")
+  additionalNotes        String?    @map("additional_notes") @db.Text
+  status                 IdeaStatus @default(SUBMITTED)
+  roadmapStage           String?    @map("roadmap_stage")
+  initialEvaluationScore Float?     @map("initial_evaluation_score")
+  penaltyRefunded        Boolean    @default(false) @map("penalty_refunded")
+  
+  createdAt              DateTime   @default(now()) @map("created_at")
+  updatedAt              DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  ownerId                Int        @map("owner_id")
+  owner                  User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  
+  committeeId            Int?       @map("committee_id")
+  committee              Committee? @relation(fields: [committeeId], references: [id], onDelete: SetNull)
+  
+  roadmap                Roadmap?
+  ganttCharts            GanttChart[]
+  fundings               Funding[]
+  meetings               Meeting[]
+  reports                Report[]
+  profitDistributions    ProfitDistribution[]
+  businessPlans BusinessPlan[]
+  @@map("ideas")
+}
+model ProfitDistribution {
+  id               Int      @id @default(autoincrement())
+  amount           Decimal  @db.Decimal(15, 2)
+  sharePercentage  Float?   @map("share_percentage")   // نسبة الحصة
+  notes            String?  @db.Text
+  distributedAt    DateTime @default(now()) @map("distributed_at")
+
+  // Relations
+  ideaId           Int
+  idea             Idea     @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  userId           Int
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profit_distributions")
+}
+model Roadmap {
+  id                 Int      @id @default(autoincrement())
+  currentStage       String   @map("current_stage")
+  progressPercentage Int      @default(0) @map("progress_percentage")
+  
+  // Relations
+  ideaId             Int      @unique @map("idea_id")
+  idea               Idea     @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@map("roadmaps")
+}
+
+model GanttChart {
+  id             Int      @id @default(autoincrement())
+  phaseName      String   @map("phase_name")
+  startDate      DateTime @map("start_date")
+  endDate        DateTime @map("end_date")
+  progress       Int      @default(0)
+  failureCount   Int      @default(0) @map("failure_count")
+  approvalStatus String   @default("pending") @map("approval_status")
+  
+  // Relations
+  ideaId         Int      @map("idea_id")
+  idea           Idea     @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  
+  tasks          Task[]
+  fundings       Funding[]
+
+  @@map("gantt_charts")
+}
+
+model Task {
+  id          Int      @id @default(autoincrement())
+  taskName    String   @map("task_name")
+  weight      Int      @default(1)
+  isCompleted Boolean  @default(false) @map("is_completed")
+  
+  // Relations
+  ganttId     Int      @map("gantt_id")
+  gantt       GanttChart @relation(fields: [ganttId], references: [id], onDelete: Cascade)
+  
+  fundings    Funding[]
+
+  @@map("tasks")
+}
+
+model Wallet {
+  id        Int      @id @default(autoincrement())
+  balance   Decimal  @default(0) @db.Decimal(15, 2)
+  
+  // Relations
+  userId    Int      @unique @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  transactions WalletTransaction[]
+
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id              Int               @id @default(autoincrement())
+  amount          Decimal           @db.Decimal(15, 2)
+  transactionType TransactionType   @map("transaction_type")
+  status          TransactionStatus @default(PENDING)
+  notes           String?           @db.Text
+  paymentMethod   String?           @default("wallet") @map("payment_method")
+  
+  createdAt       DateTime          @default(now()) @map("created_at")
+
+  // Relations
+  walletId        Int               @map("wallet_id")
+  wallet          Wallet            @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  
+  senderId        Int?              @map("sender_id")
+  sender          User?             @relation("Sender", fields: [senderId], references: [id])
+  
+  receiverId      Int?              @map("receiver_id")
+  receiver        User?             @relation("Receiver", fields: [receiverId], references: [id])
+  
+  fundingId       Int?              @map("funding_id")
+  funding         Funding?          @relation(fields: [fundingId], references: [id])
+
+  @@map("wallet_transactions")
+}
+
+model Funding {
+  id              Int      @id @default(autoincrement())
+  requestedAmount Decimal  @map("requested_amount") @db.Decimal(15, 2)
+  approvedAmount  Decimal? @map("approved_amount") @db.Decimal(15, 2)
+  justification   String?  @db.Text
+  status          String   @default("requested")
+  committeeNotes  String?  @map("committee_notes") @db.Text
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  ideaId          Int      @map("idea_id")
+  idea            Idea     @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  
+  ganttId         Int?     @map("gantt_id")
+  gantt           GanttChart? @relation(fields: [ganttId], references: [id])
+  
+  taskId          Int?     @map("task_id")
+  task            Task?    @relation(fields: [taskId], references: [id])
+  
+  transactions    WalletTransaction[]
+
+  @@map("fundings")
+}
+
+model Meeting {
+  id          Int      @id @default(autoincrement())
+  meetingDate DateTime @map("meeting_date")
+  notes       String?  @db.Text
+  type        String
+  requestedBy String   @map("requested_by")
+  
+  // Relations
+  ideaId      Int      @map("idea_id")
+  idea        Idea     @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@map("meetings")
+}
+
+model Report {
+  id          Int      @id @default(autoincrement())
+  title       String
+  content     String   @db.Text
+  reportType  String   @map("report_type")
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  ideaId      Int      @map("idea_id")
+  idea        Idea     @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@map("reports")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  title     String
+  message   String   @db.Text
+  type      String
+  isRead    Boolean  @default(false) @map("is_read")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  userId    Int      @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+model BusinessPlan {
+  id                     Int                 @id @default(autoincrement())
+
+  // Relation مع Idea (one-to-many لأن الـ migration ما حددش unique)
+  ideaId                 Int
+  idea                   Idea                @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  keyPartners            String?             @db.Text @map("key_partners")
+  keyActivities          String?             @db.Text @map("key_activities")
+  keyResources           String?             @db.Text @map("key_resources")
+  valueProposition       String?             @db.Text @map("value_proposition")
+  customerRelationships  String?             @db.Text @map("customer_relationships")
+  channels               String?             @db.Text @map("channels")
+  customerSegments       String?             @db.Text @map("customer_segments")
+  costStructure          String?             @db.Text @map("cost_structure")
+  revenueStreams         String?             @db.Text @map("revenue_streams")
+
+  status                 BusinessPlanStatus  @default(DRAFT)
+
+  createdAt              DateTime            @default(now()) @map("created_at")
+  updatedAt              DateTime            @updatedAt @map("updated_at")
+
+  @@map("business_plans")
 }

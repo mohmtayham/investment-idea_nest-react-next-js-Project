@@ -1,50 +1,62 @@
-"use server";
+"use server"
 
 import { redirect } from "next/navigation";
-import { getSession } from "./session";
-
+import { getSession, createSession, updateTokens } from "./session";
 import { BACKEND_URL } from "./constant";
 import {
   FormState,
   LoginFormSchema,
   SignupFormSchema,
 } from "./type";
-import { createSession, updateTokens } from "./session";
 import { cookies } from "next/dist/server/request/cookies";
+
 export async function signOut() {
-  console.log("--- [Frontend: SignOut Triggered] ---");
+  console.log("--- [Frontend: signOut] Triggered ---");
 
   try {
     const cookieStore = await cookies();
-    
-    // الحل هنا: تخزين نتيجة الدالة في متغير باسم session
-    const session = await getSession(); 
+    const session = await getSession();
 
-    // الآن يمكنك استخدام session.accessToken بأمان
     if (session && session.accessToken) {
-      const response = await fetch(`${BACKEND_URL}/auth/signout`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${session.accessToken}`, 
-          "Content-Type": "application/json"
+      console.log("--- [Frontend: signOut] Attempting to revoke access token for user.");
+      try {
+        const response = await fetch(`${BACKEND_URL}/auth/signout`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${session.accessToken}`,
+            "Content-Type": "application/json"
+          }
+        });
+        console.log(`--- [Frontend: signOut] Backend Revoke Response Status: ${response.status}`);
+        if (!response.ok) {
+          const errorBody = await response.text().catch(() => "No response body");
+          console.error(`--- [Frontend: signOut] ❌ Backend SignOut failed with status ${response.status}: ${errorBody}`);
         }
-      });
-      console.log("📡 Backend Revoke Response Status:", response.status);
+      } catch (fetchError) {
+        console.error(`--- [Frontend: signOut] 🔥 Fetch error during backend signout: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`);
+        console.error(fetchError);
+      }
+    } else {
+      console.log("--- [Frontend: signOut] No active session or access token found for sign out.");
     }
 
     cookieStore.delete("session");
-    console.log("✅ Local cookie deleted");
+    console.log("--- [Frontend: signOut] ✅ Local session cookie deleted.");
   } catch (error) {
-    console.error("🔥 SignOut Error:", error);
+    console.error(`--- [Frontend: signOut] 🔥 General SignOut Error: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(error);
+  } finally {
+    console.log("--- [Frontend: signOut] Redirecting to /auth/signin ---");
+    redirect("/auth/signin");
   }
-
-  redirect("/auth/signin");
 }
+
 export async function signUp(state: FormState, formData: FormData): Promise<FormState> {
-  console.log('--- [Frontend Action Started] ---');
-  let isSuccessful = false; // <--- أضف هذا السطر هنا
-  
+  console.log("--- [Frontend: signUp] Action Started ---");
+  let isSuccessful = false;
+
   try {
+    console.log("--- [Frontend: signUp] Validating form data ---");
     const validationFields = SignupFormSchema.safeParse({
       name: formData.get("name"),
       email: formData.get("email"),
@@ -52,75 +64,86 @@ export async function signUp(state: FormState, formData: FormData): Promise<Form
     });
 
     if (!validationFields.success) {
-      console.warn('⚠️ Validation Failed:', validationFields.error.flatten().fieldErrors);
+      console.warn("--- [Frontend: signUp] ⚠️ Validation Failed:", validationFields.error.flatten().fieldErrors);
       return { error: validationFields.error.flatten().fieldErrors };
     }
+    console.log("--- [Frontend: signUp] ✅ Form data validated successfully ---");
 
-    console.log('Calling Backend:', `${BACKEND_URL}/auth/signup`);
-    
+    console.log(`--- [Frontend: signUp] Calling Backend SignUp API: ${BACKEND_URL}/auth/signup`);
     const response = await fetch(`${BACKEND_URL}/auth/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(validationFields.data),
     });
 
-    console.log('Backend Status Code:', response.status);
-    console.log('Backend Status Text:', response.statusText);
+    console.log(`--- [Frontend: signUp] Backend Status Code: ${response.status}`);
+    console.log(`--- [Frontend: signUp] Backend Status Text: ${response.statusText}`);
 
-  if (response.ok) {
-      console.log('🚀 Registration success!');
-      isSuccessful = true; // نضع علامة النجاح هنا
+    if (response.ok) {
+      console.log("--- [Frontend: signUp] 🚀 Registration success!");
+      isSuccessful = true;
     } else {
-      const errorData = await response.json().catch(() => ({}));
+      const errorData = await response.json().catch(() => ({ message: "Unknown error from backend" }));
+      console.error("--- [Frontend: signUp] ❌ Backend SignUp failed:", errorData);
       return {
-        message: response.status === 409 ? "User exists!" : errorData.message,
+        message: response.status === 409 ? "User exists!" : (errorData.message || "Registration failed"),
       };
     }
   } catch (error) {
-    // نتأكد أننا لا نلتقط خطأ الـ redirect هنا
-    console.error('🔥 Error:', error);
-    return { message: "Something went wrong" };
+    console.error(`--- [Frontend: signUp] 🔥 General SignUp Action Error: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(error);
+    return { message: "Something went wrong during sign up." };
   }
 
-  // نستدعي الـ redirect هنا خارج الـ try/catch
   if (isSuccessful) {
+    console.log("--- [Frontend: signUp] Redirecting to /auth/signin after successful registration ---");
     redirect("/auth/signin");
   }
+  return {}; // Should not be reached if redirect occurs, but good for type safety
 }
 
 export async function signIn(
   state: FormState,
   formData: FormData
 ): Promise<FormState> {
+  console.log("--- [Frontend: signIn] Action Started ---");
+  console.log("--- [Frontend: signIn] Validating form data ---");
   const validatedFields = LoginFormSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
   });
 
   if (!validatedFields.success) {
+    console.warn("--- [Frontend: signIn] ⚠️ Validation Failed:", validatedFields.error.flatten().fieldErrors);
     return {
-      message: "Validation Error", // تأكد أن FormState لديك يحتوي على حقل message
+      message: "Validation Error",
       error: validatedFields.error.flatten().fieldErrors,
     };
   }
+  console.log("--- [Frontend: signIn] ✅ Form data validated successfully ---");
 
   try {
+    console.log(`--- [Frontend: signIn] Calling Backend SignIn API: ${BACKEND_URL}/auth/signin`);
     const response = await fetch(`${BACKEND_URL}/auth/signin`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(validatedFields.data),
     });
 
+    console.log(`--- [Frontend: signIn] Backend Status Code: ${response.status}`);
+    console.log(`--- [Frontend: signIn] Backend Status Text: ${response.statusText}`);
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      const errorData = await response.json().catch(() => ({ message: "Unknown error from backend" }));
+      console.error("--- [Frontend: signIn] ❌ Backend SignIn failed:", errorData);
       return {
         message: response.status === 401 ? "Invalid Credentials!" : (errorData.message || "Login failed"),
       };
     }
 
     const result = await response.json();
-    
-    // تأكد أن createSession لا ترفع خطأً غير متوقع
+    console.log("--- [Frontend: signIn] ✅ Login successful, creating session...");
+
     await createSession({
       user: {
         id: result.id,
@@ -130,59 +153,112 @@ export async function signIn(
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
     });
+    console.log("--- [Frontend: signIn] ✅ Session created successfully.");
 
-    // الـ redirect يجب أن تكون خارج الـ try/catch لتجنب التقاطها
   } catch (error) {
-    console.error('🔥 SignIn Action Error:', error);
-    return { message: "Server unreachable or connection error." };
+    console.error(`--- [Frontend: signIn] 🔥 General SignIn Action Error: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(error);
+    return { message: "Server unreachable or connection error during sign in." };
   }
 
-  // التوجيه الناجح
-  redirect("/heroSection");
+  console.log("--- [Frontend: signIn] Redirecting to /profile after successful login ---");
+  redirect("/profile");
 }
 
-export const refreshToken = async (
-  oldRefreshToken: string
-) => {
+export async function refreshToken(token: string) {
+  console.log("--- [Frontend: refreshToken] 🔄 Attempting to refresh token with:", token.substring(0, 10) + "...");
+
   try {
-    const response = await fetch(
-      `${BACKEND_URL}/auth/refresh`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          refresh: oldRefreshToken,
-        }),
-      }
-    );
+    console.log(`--- [Frontend: refreshToken] Calling Backend Refresh API: ${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/refresh`);
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh: token }),
+    });
+
+    console.log(`--- [Frontend: refreshToken] 📡 Refresh Response Status: ${response.status}`);
 
     if (!response.ok) {
-      throw new Error(
-        "Failed to refresh token" + response.statusText
-      );
+      const errorData = await response.json().catch(() => ({ message: "No response body" }));
+      console.error("--- [Frontend: refreshToken] ❌ Refresh Token Server Error:", errorData);
+      throw new Error(`Refresh failed with status ${response.status}: ${JSON.stringify(errorData)}`);
     }
 
-    const { accessToken, refreshToken } =
-      await response.json();
-    // update session with new tokens
-    const updateRes = await fetch(
-      "http://localhost:3000/api/auth/update",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          accessToken,
-          refreshToken,
-        }),
-      }
-    );
-    if (!updateRes.ok)
-      throw new Error("Failed to update the tokens");
+    const data = await response.json();
+    console.log("--- [Frontend: refreshToken] ✅ New Tokens received successfully.");
 
-    return accessToken;
-  } catch (err) {
-    console.error("Refresh Token failed:", err);
-    return null;
+    await updateTokens({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+    });
+    console.log("--- [Frontend: refreshToken] ✅ Session tokens updated.");
+
+    return data.accessToken;
+  } catch (error) {
+    console.error(`--- [Frontend: refreshToken] 🚨 Critical Error in refreshToken function: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(error);
+    throw error;
+  }
+}
+
+export interface FetchOptions extends RequestInit {
+  headers?: Record<string, string>;
+}
+
+export const authFetch = async (url: string, options: FetchOptions = {}) => {
+  console.log(`--- [Frontend: authFetch] Initiating request to: ${url} ---`);
+  const session = await getSession();
+
+  const baseUrl = BACKEND_URL?.endsWith("/") ? BACKEND_URL?.slice(0, -1) : BACKEND_URL;
+  const path = url.startsWith("/") ? url : `/${url}`;
+  const fullUrl = `${baseUrl}${path}`;
+
+  options.headers = {
+    ...options.headers,
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${session?.accessToken}`,
+  };
+
+  try {
+    console.log(`--- [Frontend: authFetch] 📡 Requesting: ${fullUrl}`);
+    let response = await fetch(fullUrl, options);
+    console.log(`--- [Frontend: authFetch] 📩 Initial response status: ${response.status}`);
+
+    if (response.status === 401) {
+      console.warn("--- [Frontend: authFetch] 🔑 401 Unauthorized Detected. Attempting to refresh token...");
+
+      if (!session?.refreshToken) {
+        console.error("--- [Frontend: authFetch] 🚫 No refresh token in session. Cannot refresh. Returning original 401.");
+        // Optionally redirect to sign-in page here if refresh token is critical
+        // redirect("/auth/signin");
+        return response; // Return the original 401 response
+      }
+
+      try {
+        console.log("--- [Frontend: authFetch] Calling refreshToken with existing refresh token.");
+        const newAccessToken = await refreshToken(session.refreshToken);
+
+        if (newAccessToken) {
+          console.log("--- [Frontend: authFetch] 🔁 Token refreshed. Retrying request with new token...");
+          options.headers.Authorization = `Bearer ${newAccessToken}`;
+          response = await fetch(fullUrl, options); // Retry the original request
+          console.log(`--- [Frontend: authFetch] 📩 Retried request status: ${response.status}`);
+        } else {
+          console.error("--- [Frontend: authFetch] ❌ Refresh token function returned no new access token. Returning original 401.");
+          // redirect("/auth/signin"); // Consider redirecting if refresh failed silently
+        }
+      } catch (refreshErr) {
+        console.error(`--- [Frontend: authFetch] 💀 Refresh flow totally failed: ${refreshErr instanceof Error ? refreshErr.message : String(refreshErr)}`);
+        console.error(refreshErr);
+        // redirect("/auth/signin"); // Redirect user to sign-in on critical refresh failure
+        throw refreshErr; // Re-throw to propagate the error
+      }
+    }
+
+    return response;
+  } catch (globalErr) {
+    console.error(`--- [Frontend: authFetch] 🌍 Network/Unknown Error during fetch: ${globalErr instanceof Error ? globalErr.message : String(globalErr)}`);
+    console.error(globalErr);
+    throw globalErr;
   }
 };

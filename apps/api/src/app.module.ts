@@ -5,22 +5,44 @@ import { PrismaService } from './prisma/prisma.service';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core'; // استيراد ضروري جداً
-import { JwtAuthGuard } from './auth/guards/jwt-auth/jwt-auth.guard'; // تأكد من صحة هذا المسار
+import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from './auth/guards/jwt-auth/jwt-auth.guard';
+import { IdeasModule } from './ideas/ideas.module';
+import { BusinessPlansModule } from './business-plans/business-plans.module';
+import { CommitteesModule } from './committees/committees.module';
+import { GanttChartsModule } from './gantt-charts/gantt-charts.module';
+import { RoadmapModule } from './roadmap/roadmap.module';
+import { TasksModule } from './tasks/tasks.module';
+import { FundingsModule } from './fundings/fundings.module';
+import { WalletsModule } from './wallets/wallets.module';
+import { ReportsModule } from './reports/reports.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { ProfileModule } from './profile/profile.module';
 
 @Module({
   imports: [
-    AuthModule, 
-    UserModule, 
-    ConfigModule.forRoot({ isGlobal: true })
+    ConfigModule.forRoot({ isGlobal: true }),
+    AuthModule,
+    UserModule,
+    IdeasModule,
+    BusinessPlansModule,
+    CommitteesModule,
+    GanttChartsModule,
+    RoadmapModule,
+    TasksModule,
+    FundingsModule,
+    WalletsModule,
+    ReportsModule,
+    NotificationsModule,
+    ProfileModule,
   ],
   controllers: [AppController],
   providers: [
-    AppService, 
+    AppService,
     PrismaService,
     {
       provide: APP_GUARD,
-      useClass: JwtAuthGuard, // تفعيل الحماية عالمياً وربطها بالـ Reflector
+      useClass: JwtAuthGuard,
     },
   ],
 })

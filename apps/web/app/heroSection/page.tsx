@@ -2,10 +2,10 @@
     import React from 'react';
     // استبدل السطر القديم بهذا:
 import { useRouter } from 'next/navigation';
-    import { motion, useScroll, useTransform } from 'framer-motion';
+    import { motion, useScroll, useTransform, Variant, Variants } from 'framer-motion';
     import { redirect } from 'next/dist/server/api-utils';
 
-    const containerVariants = {
+    const containerVariants:Variants = {
     hidden: {},
     show: {
         transition: {
@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation';
     },
     };
 
-    const wordVariants = {
+    const wordVariants:Variants = {
     hidden: { opacity: 0, y: 30 },
     show: {
         opacity: 1,
@@ -34,7 +34,7 @@ import { useRouter } from 'next/navigation';
     const parallaxY = useTransform(scrollY, [0, 400], [0, -60]);
 
    const handleStartFree = () => {
-        router.push('/dashboard'); // استخدم push بدلاً من redirect
+        router.push('/landingPage'); // استخدم push بدلاً من redirect
     };
 
     const title = "Software Startup Incubator Platform";
