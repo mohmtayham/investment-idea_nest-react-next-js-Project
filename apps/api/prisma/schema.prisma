@@ -172,16 +172,28 @@ model ProfitDistribution {
 }
 model Roadmap {
   id                 Int      @id @default(autoincrement())
+
+  // المرحلة الحالية للمشروع
   currentStage       String   @map("current_stage")
+
+  // نسبة تقدم المشروع
   progressPercentage Int      @default(0) @map("progress_percentage")
-  
-  // Relations
+
+  // وصف المرحلة الحالية وما سيحدث بعدها
+  stageDescription   String?  @db.Text @map("stage_description")
+
+  // المرحلة القادمة
+  nextStep           String?  @map("next_step")
+
+  // آخر وقت تم فيه تحديث الـ roadmap
+  lastUpdate         DateTime? @map("last_update")
+
+  // العلاقة مع الفكرة
   ideaId             Int      @unique @map("idea_id")
   idea               Idea     @relation(fields: [ideaId], references: [id], onDelete: Cascade)
 
   @@map("roadmaps")
 }
-
 model GanttChart {
   id             Int      @id @default(autoincrement())
   phaseName      String   @map("phase_name")
